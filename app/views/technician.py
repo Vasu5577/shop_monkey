@@ -106,20 +106,14 @@ def modify_job(job_id):
         if job_details.get('job_completed'):
             flash('Cannot modify completed work order', 'warning')
             return redirect(url_for('technician.job_detail', job_id=job_id))
-        
-        if request.method == 'POST':
-            return render_template('technician/modify_job.html',
-                       data=job_details['job_info'],
-                       services=job_details.get('services', []),
-                       parts=job_details.get('parts', []),
-                       all_services=job_details.get('all_services', []),
-                       all_parts=job_details.get('all_parts', []),
-                       job_completed=job_details.get('job_completed', False))
-            
-        return render_template('technician/job_detail.html',
-                       data=job_details['job_info'],
-                       services=job_details.get('services', []),
-                       parts=job_details.get('parts', []))
+
+        return render_template('technician/modify_job.html',
+                               data=job_details['job_info'],
+                               services=job_details.get('services', []),
+                               parts=job_details.get('parts', []),
+                               all_services=job_details.get('all_services', []),
+                               all_parts=job_details.get('all_parts', []),
+                               job_completed=job_details.get('job_completed', False))
 
     except Exception as e:
         logger.error(f"Failed to load work order modification page (ID: {job_id}): {e}")
@@ -174,7 +168,7 @@ def add_part_to_job(job_id):
 
     try:
         part_id = request.form.get('part_id', type=int)
-        quantity = request.form.get('quantity', type=int)
+        quantity = request.form.get('part_qty', type=int)
 
         if not part_id or not validate_positive_integer(part_id):
             flash('Please select a valid part', 'error')
@@ -199,6 +193,47 @@ def add_part_to_job(job_id):
         logger.error(f"Failed to add part: {e}")
         flash('Failed to add part, please try again later', 'error')
         return redirect(url_for('technician.modify_job', job_id=job_id))
+
+
+@technician_bp.route('/jobs/<int:job_id>/remove-service/<int:service_id>', methods=['POST'])
+@handle_database_errors
+def remove_service_from_job(job_id, service_id):
+    redirect_response = require_technician_login()
+    if redirect_response:
+        return redirect_response
+    try:
+        success, errors = job_service.remove_service_from_job(job_id, service_id)
+        if not success:
+            for error in errors:
+                logger.error(f"Failed to remove service: {error}")
+            flash('Failed to remove service', 'error')
+            return redirect(url_for('technician.current_jobs'))
+        
+        flash('Service removed', 'success')
+    except ValueError as e:
+        flash(str(e), 'error')
+    return redirect(url_for('technician.modify_job', job_id=job_id))
+
+
+@technician_bp.route('/jobs/<int:job_id>/remove-part/<int:part_id>', methods=['POST'])
+@handle_database_errors
+def remove_part_from_job(job_id, part_id):
+    redirect_response = require_technician_login()
+    if redirect_response:
+        return redirect_response
+    try:
+        success, errors = job_service.remove_part_from_job(job_id, part_id)
+        
+        if not success:
+            for error in errors:
+                logger.error(f"Failed to remove part: {error}")
+            flash('Failed to remove part', 'error')
+            return redirect(url_for('technician.current_jobs'))
+        
+        flash('Part removed', 'success')
+    except ValueError as e:
+        flash(str(e), 'error')
+    return redirect(url_for('technician.modify_job', job_id=job_id))
 
 
 @technician_bp.route('/jobs/<int:job_id>/complete', methods=['POST'])
